@@ -1,5 +1,1 @@
-Creating requirements.txt for Streamlit Cloud
-requirements.txt
-
-Presented file
-Concluído
+streamlit
