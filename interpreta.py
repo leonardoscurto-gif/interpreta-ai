@@ -1,144 +1,187 @@
 import streamlit as st
-import re
+import google.generativeai as genai
 
-# Configuração da página institucional
 st.set_page_config(
     page_title="Interpreta-AI - NEIE",
     page_icon="⚖️",
     layout="wide"
 )
 
-# Cabeçalho do Sistema
-st.title("⚖️ Interpreta-AI")
-st.subheader("Motor de Triagem, Regionalização e Análise Prescricional Estrita - NEIE")
+st.title("⚖️ Interpreta-AI — NEIE/DPU")
+st.subheader("Análise Processual com Inteligência Artificial — Divisão Criminal e Cível Eleitoral")
 st.markdown("---")
+
+# Configuração da API via secrets do Streamlit Cloud
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    modelo = genai.GenerativeModel("gemini-2.0-flash")
+except Exception:
+    st.error("⚠️ Chave de API não configurada. Configure GEMINI_API_KEY nos Secrets do Streamlit Cloud.")
+    st.stop()
+
+# Prompt jurídico estruturado baseado no fluxo real da assessoria do NEIE
+PROMPT_SISTEMA = """
+Você é um assistente jurídico especializado em direito eleitoral brasileiro, 
+atuando como suporte à assessoria do Núcleo Estratégico de Interiorização 
+Eleitoral (NEIE) da Defensoria Pública da União (DPU).
+
+Sua função é analisar textos brutos de processos eleitorais e gerar um 
+despacho inaugural estruturado, no padrão institucional da DPU, contendo 
+obrigatoriamente os seguintes itens:
+
+1. COMPETÊNCIA E ATRIBUIÇÃO DO NEIE
+   - Identifique o estado e a zona eleitoral
+   - Defina qual Ofício do NEIE é competente:
+     * 1º Ofício — Região Sul (PR, RS, SC)
+     * 2º Ofício — Região Sudeste (SP, RJ, MG, ES)
+     * 3º Ofício — Regiões Norte e Centro-Oeste
+     * 4º Ofício — Região Nordeste
+     * Obs: casos de Violência Política de Gênero (VPG) são sempre 
+       centralizados no 1º Ofício (Região Sul), independentemente do estado
+
+2. IMPUTAÇÃO E PENA EM ABSTRATO
+   - Identifique o crime imputado e o artigo legal
+   - Informe a pena mínima e máxima prevista
+
+3. MARCOS PRESCRICIONAIS
+   - Calcule o prazo prescricional com base no Art. 109 do Código Penal
+   - Identifique o ano do fato
+   - Projete o ano limite para a punibilidade estatal
+   - Adote sempre a perspectiva da Defesa (a prescrição favorece o assistido)
+
+4. CABIMENTO DE ANPP OU SUSPENSÃO CONDICIONAL DO PROCESSO
+   - Avalie se há possibilidade de Acordo de Não Persecução Penal (ANPP)
+   - Avalie se há possibilidade de Suspensão Condicional do Processo (Art. 89 da Lei 9.099/95)
+
+5. FASE PROCESSUAL
+   - Identifique em que fase se encontra o processo (inquérito, denúncia, 
+     resposta à acusação, instrução, julgamento etc.)
+
+6. AUDIÊNCIAS DESIGNADAS
+   - Verifique se há audiência marcada no texto
+   - Se houver, destaque com ALERTA DE URGÊNCIA
+
+7. SITUAÇÃO DA CITAÇÃO
+   - Identifique se a citação foi pessoal, por edital, se há revelia 
+     ou necessidade de curadoria especial
+
+8. DILIGÊNCIAS NECESSÁRIAS
+   - Liste as diligências a serem realizadas pelo Cartório
+   - Liste as diligências a serem realizadas pela Assessoria
+
+9. TESES DEFENSIVAS INICIAIS
+   - Sugira teses de defesa aplicáveis ao caso concreto
+
+10. PROVIDÊNCIAS
+    - Indique as providências imediatas da Assessoria
+    - Indique as providências imediatas do Cartório
+
+Ao final, gere o DESPACHO INAUGURAL completo, formatado no padrão 
+institucional da DPU, numerado por itens, pronto para ser inserido no PAJ.
+
+IMPORTANTE:
+- Seja objetivo e técnico
+- Use linguagem jurídica formal
+- Se alguma informação não estiver disponível no texto, indique expressamente
+- Nunca invente dados que não constem no texto fornecido
+- Adote sempre a perspectiva da Defensoria Pública (defesa do assistido)
+"""
 
 col_esquerda, col_direita = st.columns([1, 1])
 
 with col_esquerda:
-    st.markdown("### 📥 Entrada de Texto Bruto (PJe / Denúncia)")
-    
-    with st.form(key="formulario_triagem"):
-        texto_peticiao = st.text_area(
-            "Cole aqui o texto integral extraído do processo/intimação:",
-            height=380,
-            placeholder="Cole o texto do tribunal aqui para a IA analisar..."
+    st.markdown("### 📥 Entrada de Dados")
+
+    with st.form(key="formulario_neie"):
+        paj_numero = st.text_input(
+            "Número do PAJ (SIS-DPU):",
+            placeholder="Ex: 2026/123-01955"
         )
-        
-        st.markdown("💡 *Dica: O motor aplicará as regras de atração dos Ofícios I, II, III e IV da Portaria e calculará os marcos temporais.*")
-        botao_enviar = st.form_submit_button(label="🚀 Analisar Processo e Gerar Despacho")
+        num_processo = st.text_input(
+            "Número do Processo Judicial (se disponível):",
+            placeholder="Ex: 0600650-87.2024.6.26.0304"
+        )
+
+        st.markdown("#### 📄 Texto Bruto do Processo")
+        texto_processo = st.text_area(
+            "Cole aqui o texto extraído do PJe, e-mail do cartório ou PDF:",
+            placeholder="Cole o conteúdo integral ou parcial do processo, denúncia, despacho ou intimação...",
+            height=350
+        )
+
+        tipo_demanda = st.radio(
+            "Natureza da demanda:",
+            ["Criminal Eleitoral", "Cível Eleitoral", "Violência Política de Gênero (VPG)"]
+        )
+
+        botao_analisar = st.form_submit_button(
+            label="🔍 Analisar com IA e Gerar Despacho Inaugural"
+        )
 
 with col_direita:
-    st.markdown("### 📤 Despacho Gerado por Inteligência Contextual")
-    
-    if botao_enviar and texto_peticiao:
-        # Normalização do texto para análise contextual
-        texto_clean = texto_peticiao.lower().replace("\n", " ").replace("\r", " ")
-        texto_clean = re.sub(r'\s+', ' ', texto_clean)
-        
-        # --- 1. MOTOR DE EXTRAÇÃO DE DADOS ---
-        padrao_processo = re.search(r'\d{7}\s*[-–]?\s*\d{2}\s*\.\s*\d{4}\s*\.\s*\d\s*\.\s*\d{2}\s*\.\s*\d{4}', texto_peticiao)
-        num_processo = padrao_processo.group(0).strip() if padrao_processo else "[NÚMERO DE PROCESSO NÃO LOCALIZADO]"
+    st.markdown("### 📊 Análise e Despacho Inaugural")
 
-        padrao_zona = re.search(r'(\d+\s*ª?\s*(?:zona|z\.e\.)\s*(?:eleitoral)?.*?)(?:perante|da comarca|$)', texto_clean)
-        if padrao_zona:
-            zona_eleitoral = padrao_zona.group(1).strip().upper()
+    if botao_analisar:
+        if not texto_processo.strip():
+            st.warning("⚠️ Insira o texto do processo para análise.")
         else:
-            comarca_busca = re.search(r'(comarca de\s*[a-zA-Záàâãéèêíïóôõöúçñ\s\/]+)', texto_clean)
-            zona_eleitoral = comarca_busca.group(1).strip().upper() if comarca_busca else "[LOCALIDADE NÃO IDENTIFICADA]"
+            with st.spinner("🤖 Analisando o processo com IA... Aguarde."):
+                try:
+                    # Monta o prompt completo com os dados do caso
+                    prompt_completo = f"""
+{PROMPT_SISTEMA}
 
-        padrao_artigo = re.search(r'(art\s*\.?\s*\d+[^;]*?(?:lei|c\/c|código|\d{4})[^;.\n]*)', texto_clean)
-        artigo_lei = padrao_artigo.group(1).strip().upper() if padrao_artigo else "ARTIGO NÃO IDENTIFICADO"
+---
+DADOS DO CASO:
+PAJ: {paj_numero if paj_numero else "Não informado"}
+Número do Processo: {num_processo if num_processo else "A identificar no texto"}
+Natureza: {tipo_demanda}
 
-        # --- 2. CLASSIFICAÇÃO DOS OFÍCIOS NATURAIS ---
-        oficio_sugerido = "Ofício Geral / Coordenação NEIE"
-        regiao_detalhe = "Região não mapeada automaticamente."
-        
-        if any(est in texto_clean for est in ["rio grande do sul", "/rs", "paraná", "/pr", "santa catarina", "/sc", ".6.21.", ".6.16.", ".6.24."]):
-            oficio_sugerido = "1º Ofício de Atuação (Região Sul)"
-            regiao_detalhe = "Jurisdição: PR, RS e SC (Art. 1º, I)"
-        elif any(est in texto_clean for est in ["são paulo", "/sp", "rio de janeiro", "/rj", "minas gerais", "/mg", "espírito santo", "/es", ".6.02.", ".6.19.", ".6.13.", ".6.08."]):
-            oficio_sugerido = "2º Ofício de Atuação (Região Sudeste)"
-            regiao_detalhe = "Jurisdição: SP, RJ, MG e ES (Art. 1º, II)"
-        elif any(est in texto_clean for est in ["piauí", "/pi", ".6.18.", "distrito federal", "/df", "goiás", "/go", "mato grosso", "/mt", "amazonas", "/am", "pará", "/pa", ".6.07."]):
-            oficio_sugerido = "3º Ofício de Atuação (Regiões Norte e Centro-Oeste)"
-            regiao_detalhe = "Jurisdição Unificada: Norte e Centro-Oeste (Art. 1º, III)"
-        elif any(est in texto_clean for est in ["bahia", "/ba", "ceará", "/ce", "pernambuco", "/pe", "maranhão", "/ma", "paraíba", "/pb", "rio grande do norte", "/rn"]):
-            oficio_sugerido = "4º Ofício de Atuação (Região Nordeste)"
-            regiao_detalhe = "Jurisdição: Estados do Nordeste (Art. 1º, IV)"
+TEXTO BRUTO DO PROCESSO:
+{texto_processo}
+---
 
-        # Atração Temática Prevalente (Art. 2º da Portaria)
-        eh_caso_genero = any(g in texto_clean for g in ["gênero", "violência política", "art. 326-b", "candidata", "vpg"])
-        if eh_caso_genero:
-            oficio_sugerido = "1º Ofício de Atuação (Sul - Centralização Nacional VPG - Art. 2º)"
-            regiao_detalhe = "Atração Temática Prevalente: Violência Política de Gênero"
+Gere a análise completa e o despacho inaugural conforme as instruções acima.
+"""
+                    resposta = modelo.generate_content(prompt_completo)
+                    resultado = resposta.text
 
-        # --- 3. ANÁLISE DE CONTEXTO PROCESSUAL ---
-        if any(g in texto_clean for g in ["in albis", "curador", "curadoria", "edital", "revel", "não constituiu"]):
-            curadoria_text = "transcorreu in albis o prazo para constituição de advogado particular, circunstância que ensejou a habilitação da Defensoria Pública da União nos autos, para a atuação a título de curadoria especial"
-        else:
-            curadoria_text = "habilitação regular da Defensoria Pública da União para assistência jurídica integral da parte necessitada"
+                    st.success("✅ Análise concluída com sucesso!")
+                    st.markdown("---")
 
-        if any(g in texto_clean for g in ["anpp", "persecução", "acordo de não", "proposta de acordo"]):
-            anpp_text = "foi determinada a suspensão do processo para análise da possibilidade de oferecimento de Acordo de Não Persecução Penal (ANPP)"
-        else:
-            anpp_text = "não há indicativos de proposta de ANPP pendente, seguindo o rito comum ordinário"
+                    # Exibe o resultado em área copiável
+                    st.text_area(
+                        "📋 Despacho Inaugural — Pronto para copiar ao PAJ:",
+                        value=resultado,
+                        height=600
+                    )
 
-        # --- 4. MARCOS TEMPORAIS E PRESCRIÇÃO DA DEFESA ---
-        ano_fato = 2026
-        for ano in ["2020", "2021", "2022", "2023", "2024", "2025", "2026"]:
-            if ano in texto_clean:
-                ano_fato = int(ano)
-                break
-        
-        pena_maxima = 4  
-        if "348" in texto_clean:
-            pena_maxima = 6  
-        elif "326-b" in texto_clean:
-            pena_maxima = 4  
+                    # Botão de download do despacho
+                    st.download_button(
+                        label="⬇️ Baixar Despacho em .txt",
+                        data=resultado,
+                        file_name=f"despacho_{paj_numero.replace('/', '-') if paj_numero else 'neie'}.txt",
+                        mime="text/plain"
+                    )
 
-        if pena_maxima <= 2:
-            anos_prescricao = 4
-        elif pena_maxima <= 4:
-            anos_prescricao = 8
-        elif pena_maxima <= 8:
-            anos_prescricao = 12
-        else:
-            anos_prescricao = 20
+                except Exception as e:
+                    st.error(f"Erro na análise: {str(e)}")
 
-        ano_limite = ano_fato + anos_prescricao
-
-        # --- 5. MONTAGEM DO DESPACHO FINAL ---
-        texto_despacho_final = (
-            f"1. PAJ recebido para atuação nos termos da Resolução CSDPU nº 250, de 9 de junho de 2026.\n"
-            f"2. Tramita em desfavor da parte assistida a Ação Penal Eleitoral nº {num_processo}, perante a {zona_eleitoral}. "
-            f"Trata-se de localidade sem cobertura ordinária por Unidade ou Núcleo Regional da DPU, razão pela qual é de atribuição do NEIE, direcionado ao {oficio_sugerido}.\n\n"
-            f"DA IMPUTAÇÃO E MARCOS PRESCRICIONAIS:\n"
-            f"3. A denúncia imputa à assistida a prática do delito previsto no {artigo_lei}.\n"
-            f"4. Certifico, para fins de análise prescricional com foco na estratégia da Defesa, que o fato ocorreu no ano de {ano_fato} e possui pena máxima cominada de {pena_maxima} anos. "
-            f"Sob a égide do Art. 109 do Código Penal, o lapso prescricional em abstrato é de {anos_prescricao} anos, fixando o ano limite de punibilidade estatal em {ano_limite}. "
-            f"Considerados os marcos interruptivos documentados, não se verifica a ocorrência do decurso temporal extintivo até o momento, encontrando-se regular o curso processual.\n\n"
-            f"DA ANÁLISE PROCESSUAL:\n"
-            f"5. Ademais, certifico que as partes assistidas foram devidamente citadas e que {curadoria_text}.\n"
-            f"6. Certifico, ainda, que {anpp_text}.\n\n"
-            f"DILIGÊNCIAS CARTORÁRIAS:\n"
-            f"7. Ao Cartório:\n"
-            f"a) Entrar em contato com as partes assistidas para cientificá-las acerca da denúncia ofertada pelo Ministério Público Federal pela suposta prática de crime eleitoral, bem como informar que a Defensoria Pública da União foi nomeada para promover sua defesa.\n"
-            f"b) Solicitar informações sobre o interesse em arrolar testemunhas que possam contribuir para o esclarecimento dos fatos, enviando seus dados de qualificação, pois este é o momento processual adequado para a apresentação do rol ao Juízo.\n\n"
-            f"DILIGÊNCIAS DA ASSESSORIA JURÍDICA:\n"
-            f"8. Adotar as providências cabíveis para elaboração da resposta à acusação."
-        )
-
-        # Exibição na Tela
-        st.success("🤖 Análise Concluída! Informações processadas com sucesso.")
-        st.text_area("📋 Minuta de Despacho Pronta (Copiar e Colar):", value=texto_despacho_final, height=500)
-        
-        # Painel Informativo Técnico
-        st.info(f"📊 **Dados de Back-End Calculados:**\n"
-                f"* **Distribuição Final:** {oficio_sugerido} ({regiao_detalhe})\n"
-                f"* **Ano Encontrado do Fato:** {ano_fato}\n"
-                f"* **Pena Máxima Avaliada:** {pena_maxima} anos\n"
-                f"* **Prescrição Projetada (Teto):** {ano_limite}")
-
-    elif not texto_peticiao:
-        st.info("📥 Insira o texto na esquerda e clique no botão para rodar.")
+    else:
+        st.info("📥 Preencha os dados e cole o texto do processo na coluna esquerda para iniciar a análise.")
+        st.markdown("---")
+        st.markdown("#### Como usar:")
+        st.markdown("1. Informe o número do PAJ")
+        st.markdown("2. Informe o número do processo (se disponível)")
+        st.markdown("3. Cole o texto bruto do processo")
+        st.markdown("4. Selecione a natureza da demanda")
+        st.markdown("5. Clique em **Analisar com IA**")
+        st.markdown("---")
+        st.markdown("#### O sistema analisará automaticamente:")
+        st.markdown("- ⚖️ Competência e atribuição do Ofício do NEIE")
+        st.markdown("- 📜 Imputação e pena em abstrato")
+        st.markdown("- ⏱️ Marcos prescricionais (visão da Defesa)")
+        st.markdown("- 🤝 Cabimento de ANPP ou suspensão condicional")
+        st.markdown("- 📋 Fase processual e situação da citação")
+        st.markdown("- 🚨 Audiências designadas (alerta de urgência)")
+        st.markdown("- 📌 Diligências e teses defensivas iniciais")
