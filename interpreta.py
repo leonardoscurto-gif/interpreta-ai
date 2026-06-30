@@ -14,7 +14,7 @@ st.markdown("---")
 # Configuração da API via secrets do Streamlit Cloud
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-  modelo = genai.GenerativeModel("gemini-1.5-flash-latest")
+    modelo = genai.GenerativeModel("gemini-1.5-flash-latest")
 except Exception:
     st.error("⚠️ Chave de API não configurada. Configure GEMINI_API_KEY nos Secrets do Streamlit Cloud.")
     st.stop()
