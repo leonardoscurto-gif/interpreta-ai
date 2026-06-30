@@ -14,19 +14,18 @@ st.markdown("---")
 # Configuração da API via secrets do Streamlit Cloud
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    modelo = genai.GenerativeModel("gemini-1.5-flash-latest")
+    modelo = genai.GenerativeModel("gemini-pro")
 except Exception:
     st.error("⚠️ Chave de API não configurada. Configure GEMINI_API_KEY nos Secrets do Streamlit Cloud.")
     st.stop()
 
-# Prompt jurídico estruturado baseado no fluxo real da assessoria do NEIE
 PROMPT_SISTEMA = """
-Você é um assistente jurídico especializado em direito eleitoral brasileiro, 
-atuando como suporte à assessoria do Núcleo Estratégico de Interiorização 
+Você é um assistente jurídico especializado em direito eleitoral brasileiro,
+atuando como suporte à assessoria do Núcleo Estratégico de Interiorização
 Eleitoral (NEIE) da Defensoria Pública da União (DPU).
 
-Sua função é analisar textos brutos de processos eleitorais e gerar um 
-despacho inaugural estruturado, no padrão institucional da DPU, contendo 
+Sua função é analisar textos brutos de processos eleitorais e gerar um
+despacho inaugural estruturado, no padrão institucional da DPU, contendo
 obrigatoriamente os seguintes itens:
 
 1. COMPETÊNCIA E ATRIBUIÇÃO DO NEIE
@@ -36,7 +35,7 @@ obrigatoriamente os seguintes itens:
      * 2º Ofício — Região Sudeste (SP, RJ, MG, ES)
      * 3º Ofício — Regiões Norte e Centro-Oeste
      * 4º Ofício — Região Nordeste
-     * Obs: casos de Violência Política de Gênero (VPG) são sempre 
+     * Obs: casos de Violência Política de Gênero (VPG) são sempre
        centralizados no 1º Ofício (Região Sul), independentemente do estado
 
 2. IMPUTAÇÃO E PENA EM ABSTRATO
@@ -54,15 +53,14 @@ obrigatoriamente os seguintes itens:
    - Avalie se há possibilidade de Suspensão Condicional do Processo (Art. 89 da Lei 9.099/95)
 
 5. FASE PROCESSUAL
-   - Identifique em que fase se encontra o processo (inquérito, denúncia, 
-     resposta à acusação, instrução, julgamento etc.)
+   - Identifique em que fase se encontra o processo
 
 6. AUDIÊNCIAS DESIGNADAS
    - Verifique se há audiência marcada no texto
    - Se houver, destaque com ALERTA DE URGÊNCIA
 
 7. SITUAÇÃO DA CITAÇÃO
-   - Identifique se a citação foi pessoal, por edital, se há revelia 
+   - Identifique se a citação foi pessoal, por edital, se há revelia
      ou necessidade de curadoria especial
 
 8. DILIGÊNCIAS NECESSÁRIAS
@@ -76,7 +74,7 @@ obrigatoriamente os seguintes itens:
     - Indique as providências imediatas da Assessoria
     - Indique as providências imediatas do Cartório
 
-Ao final, gere o DESPACHO INAUGURAL completo, formatado no padrão 
+Ao final, gere o DESPACHO INAUGURAL completo, formatado no padrão
 institucional da DPU, numerado por itens, pronto para ser inserido no PAJ.
 
 IMPORTANTE:
@@ -127,7 +125,6 @@ with col_direita:
         else:
             with st.spinner("🤖 Analisando o processo com IA... Aguarde."):
                 try:
-                    # Monta o prompt completo com os dados do caso
                     prompt_completo = f"""
 {PROMPT_SISTEMA}
 
@@ -149,14 +146,12 @@ Gere a análise completa e o despacho inaugural conforme as instruções acima.
                     st.success("✅ Análise concluída com sucesso!")
                     st.markdown("---")
 
-                    # Exibe o resultado em área copiável
                     st.text_area(
                         "📋 Despacho Inaugural — Pronto para copiar ao PAJ:",
                         value=resultado,
                         height=600
                     )
 
-                    # Botão de download do despacho
                     st.download_button(
                         label="⬇️ Baixar Despacho em .txt",
                         data=resultado,
@@ -169,13 +164,6 @@ Gere a análise completa e o despacho inaugural conforme as instruções acima.
 
     else:
         st.info("📥 Preencha os dados e cole o texto do processo na coluna esquerda para iniciar a análise.")
-        st.markdown("---")
-        st.markdown("#### Como usar:")
-        st.markdown("1. Informe o número do PAJ")
-        st.markdown("2. Informe o número do processo (se disponível)")
-        st.markdown("3. Cole o texto bruto do processo")
-        st.markdown("4. Selecione a natureza da demanda")
-        st.markdown("5. Clique em **Analisar com IA**")
         st.markdown("---")
         st.markdown("#### O sistema analisará automaticamente:")
         st.markdown("- ⚖️ Competência e atribuição do Ofício do NEIE")
