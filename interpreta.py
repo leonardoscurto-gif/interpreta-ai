@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
 st.set_page_config(
     page_title="Interpreta-AI - NEIE",
@@ -11,10 +11,8 @@ st.title("⚖️ Interpreta-AI — NEIE/DPU")
 st.subheader("Análise Processual com Inteligência Artificial — Divisão Criminal e Cível Eleitoral")
 st.markdown("---")
 
-# Configuração da API via secrets do Streamlit Cloud
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    modelo = genai.GenerativeModel("gemini-pro")
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception:
     st.error("⚠️ Chave de API não configurada. Configure GEMINI_API_KEY nos Secrets do Streamlit Cloud.")
     st.stop()
@@ -140,7 +138,10 @@ TEXTO BRUTO DO PROCESSO:
 
 Gere a análise completa e o despacho inaugural conforme as instruções acima.
 """
-                    resposta = modelo.generate_content(prompt_completo)
+                    resposta = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=prompt_completo
+                    )
                     resultado = resposta.text
 
                     st.success("✅ Análise concluída com sucesso!")
